@@ -1,0 +1,340 @@
+<!DOCTYPE !html>
+<html>
+  <head>
+     <title>Lost Treasures</title>
+     <script src="jquery-1.10.0.min.js" type="text/javascript"></script>
+     <style type="text/css">
+body
+{
+  font-family: Courier;
+  font-size: 12px;
+  line-height: 16px;
+  color: #0F0;
+  background-color: black;
+  padding:0;
+  margin: 20px 20px;
+}
+a,a:visited
+{
+   color: #C00;
+   text-decoration:underline;
+}
+     </style>
+  </head>
+  <body>
+     <h1>Lost Treasures :: Can you find them all?</h1>
+
+     <div id="in-progress" style="display:none">
+       <div id="status" style="color: #0F0; background-color:black; padding: 10px;margin-bottom: 10px"> 
+	  <p style="min-width:30%;float:left;margin-right:10px;">Current level: <span id="status-level">-1</span></p>
+	  <p style="min-width:30%;float:left;margin-right:10px;">Treasures found: <span id="status-treasure">0</span> / 5</p>
+	  <p style="min-width:30%;float:left;">Rooms visited/total: <span id="status-visited-rooms">0</span> / <span id="status-total-rooms">0</span></p>
+	  <p style="clear:both"></p>
+       </div>
+
+       <div>
+	 <div style="float:left;min-width:30%;padding: 0 10px;color:black;background-color:#0C0;">
+	   <p>* * S t o r y * *</p>
+	   <div id="story"></div>
+	 </div>
+	 <div style="max-width:50%;min-width:20%;float:left;margin-left:40px;">
+	   <p><b>* * M a p * *</b></p>
+	   <div id="map"></div>
+	 </div>
+	 <div style="clear:both"></div>
+       </div>
+
+       <div style="padding:10px;display:none" >
+	  <button id="btnRefresh">Refresh</button>
+       </div>
+
+       <div>
+	 <p class="shortcut-control">(<a href="#">Show keyboard shortcuts</a>)</p>
+	  <div id="keyboard-shortcuts" style="display:none">
+	    <p><b>Keyboard shortcuts</b></p>
+	    <table>
+	      <tr>
+		<th>Key</th>
+		<th>Action</th>
+	      </tr>
+	      <tr>
+		<td>j</td>
+		<td>Move west (if possible)</td>
+	      </tr>
+	      <tr>
+		<td>l</td>
+		<td>Move east (if possible)</td>
+	      </tr>
+	      <tr>
+		<td>i</td>
+		<td>Move north (if possible)</td>
+	      </tr>
+	      <tr>
+		<td>k</td>
+		<td>Move south (if possible)</td>
+	      </tr>
+	      <tr>
+		<td>.</td>
+		<td>Go downstairs (if possible)</td>
+	      </tr>
+	      <tr>
+		<td>Enter/Return</td>
+		<td>Presses the Continue button (if present)</td>
+	      </tr>
+	    </table>
+	  </div>
+       </div>
+     </div> <!-- end in progress -->
+
+     <div id="game-controls" style="padding: 10px 0; margin: 0 10px">
+       <button id="btnNewGame">New Game</button>
+     </div>
+     <br/>
+     <br/>
+     <address>Copyright &copy; <a href="http://games.taskboy.com/">taskboy.com</a> :: $Revision: 9 $:</address>
+   </body>
+   <script type="text/javascript">
+ $(document).ready(function()
+ {
+
+ var Game = new function()
+ {
+    var session_id = "";
+
+    this.init = function()
+    {
+       $("#btnNewGame").click(function(e) 
+       {
+	  console.log("New game");
+	  e.preventDefault();
+	  Game.new_game();
+       });
+
+       $("#btnRefresh").click(function(e)
+       {
+	  console.log("Refresh");
+	  e.preventDefault();
+	  Game.update_all_game();
+       });
+
+       $(".shortcut-control").find("a").click(function(e)
+       {
+	  console.log("clicked!");
+	  e.preventDefault();
+	  console.log("text: " + $(this).text());
+	  if ($(this).text() == "Show keyboard shortcuts")
+	  {
+	     $(this).text("Hide keyboard shortcuts");
+	     $("#keyboard-shortcuts").show();
+	  }
+	  else
+	  {
+	     $(this).text("Show keyboard shortcuts");
+	     $("#keyboard-shortcuts").hide();
+	  }
+	  return false;
+       });
+
+       $("body").keyup(function(e)
+       {
+	  console.log("Key: " + e.which);
+
+	  // i = 73, north, exit-pos: 0 
+	  // l = 76, east, exit-pos: 1
+	  // k = 75, south, exit-pos: 2
+	  // j = 74, west, exit-pos: 3
+	  // Ugh trigger links by exit_pos
+	  var pos = {73: 0, 76: 1, 75: 2, 74: 3};
+
+	  if (pos.hasOwnProperty(e.which)) 
+	  { 
+	    return $("a[data-exit-side-pos=" + pos[e.which] + "]").click();
+	  }
+
+	  // "return" fires continue 
+	  if (e.which == "13")
+	  {
+	     return $("#btnContinue").click();
+	  }
+
+	  // 190 (>) fires down steps
+	  if (e.which == "190")
+	  {
+	     return $("a[data-type=downstairs]").click();
+	  }
+       });;
+    };
+
+    this.new_game = function() 
+    {
+       $.ajax({
+		url: "/new_game",
+		dataType: "xml", 
+		success : function(d) {
+		   Game.session_id = $(d).find("sid").text();
+		   console.log("New session: " + Game.session_id);
+		   Game.update_all_game();
+		   $("#in-progress").show(750);
+		}
+	      });
+    };
+
+    this.update_all_game = function()
+    {
+	 Game.update_story();
+	 Game.update_status(); 
+	 Game.update_map();
+    }
+
+    this.update_status = function() 
+    {
+      $.ajax({ url: "/update_status",
+	       dataType: "xml", 
+	       data: { session_id: Game.session_id },
+	       success: function(d) {
+		  if (d) 
+		  {
+		     $("#status-level").html($("current_level", d).text());
+		     $("#status-total-rooms").html($("total_rooms", d).text());
+		     $("#status-visited-rooms").html($("visited_rooms", d).text());
+		     if ($("alive", d).text() == 0)
+		     {
+			 $("#btnContinue").hide(); // game over
+		     }
+
+		     try 
+		     {
+		       var t = $("treasures", d);
+		       if (t)
+		       {
+			 $("#status-treasure").html(t.length);
+		       }
+		     }
+		     catch (err)
+		     {
+			console.log(err.message);
+		     }
+
+		  }
+		  else
+		  {
+		     console.log("Update status failed");
+		  }
+	       }
+	     });
+    };
+
+    this.update_map = function() 
+    {
+      $.ajax({
+	       url: "/update_map", 
+	       dataType: "xml",
+	       data: { session_id: Game.session_id },
+	       success: function(d) 
+	       {
+		  if (d)
+		  {
+		     var door_style = [ "border-top:none;", // north
+					"border-right:none;", // east
+					"border-bottom:none;", // south
+					"border-left:none;", // west
+				      ];
+
+		    var len = $("len", d).text();
+                    var map = "";
+                    for (var y=0; y < len; y++)
+	            {
+		       map = map + "<tr>";
+		       for (var x=0; x < len; x++) 
+		       {
+			   var id = ((y * len) + x);
+			   var room = $("room[id=" + id + "]", d);
+
+			   if ($(room).attr("visited") == "1")
+			   {
+		              var style = "border: 1px solid #0C0;padding:2px;min-width:10px;text-align:center;";
+			      $(room).find("doors").each(function()
+                              {
+			         var pos = $(this).attr("exit_side_pos");
+				 style = style + door_style[pos];
+			      });
+                  
+                              // stairs?
+                              var content = "&nbsp;";
+                              if ($(room).find("stairs").length > 0)
+                              {
+                                 content = "&gt;";
+                              }
+      
+                              if ($("cwd", d).text() == id)
+                              {
+                                 style = style + "background-color:#C00;";
+                              }
+
+                              map = map + "<td style=\"" + style + "\">" + content + "</td>";
+                           }
+			   else
+		           {
+			      map = map + "<td style=\"border: 1px solid #0C0;background-color:#0C0;padding:2px;min-width:10px;\">&nbsp;</td>";
+			   }
+		       }
+		       map = map + "</tr>"; 
+                    }
+		    $("#map").html("<table style=\"border-spacing:0;border:1px solid #0C0;padding:0;margin:0\">" + map + "</table>");
+                 }
+              } 
+            });
+   };
+
+   this.update_story = function ()
+   {
+     $.ajax({
+              url: "/update_room_description", 
+              dataType: "xml",
+              data: { session_id: Game.session_id },
+              success: function(d) 
+              {
+                 if (d)
+                 {
+                    $("#story").html($("scene", d).text());
+                    $("#story").find("a").click(function(e){
+                       e.preventDefault();
+                       $.ajax({
+                                url: $(this).attr("href"),
+                                data: { session_id : Game.session_id },
+                                dataType: "xml",
+                                success: function(d) {
+                                   var s = $("status", d).text();
+                                   if (s)
+                                   {
+                                      
+                                      $("#story").html(s);
+				      
+				      if ($("alive", d).text() == "1")
+				      {
+                                         $("#story").append("<p><button id=\"btnContinue\">Continue</button></p>");
+                                         $("#btnContinue").click(function(e)
+                                         { 
+                                            Game.update_all_game();
+                                         });
+                                      }
+                                      else
+                                      {
+                                         Game.update_status();
+                                      }
+                                   }
+                                } 
+                              });
+
+                    });
+                 }
+              } 
+            });
+
+   };
+};
+
+   Game.init();
+});
+  </script>
+</html>
