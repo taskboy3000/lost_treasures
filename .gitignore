@@ -1,3 +1,6 @@
 *~
 cpanfile.*
 local
+env.sh
+share/*shema/*
+share/*db
