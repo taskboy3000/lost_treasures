@@ -1,18 +1,19 @@
 package LostTreasure;
+use strict;
+use warnings;
 use Mojo::Base 'Mojolicious';
+use Schema;
+
+has schema => sub {
+    return Schema->connect();
+};
 
 # This method will run once at server start
 sub startup {
   my $self = shift;
-
-  # Documentation browser under "/perldoc"
-  $self->plugin('PODRenderer');
-
-  # Router
-  my $r = $self->routes;
-
-  # Normal route to controller
-  $r->get('/')->to('example#welcome');
+  $self->helper(db => sub { $self->app->schema});
+  $self->plugin("LostTreasure::Plugin::Routes");
+  $self->make_routes();
 }
 
 1;
